@@ -61,7 +61,7 @@ const opRemove = (op: Automerge.Diff, [map, ops]: any) => {
     if (
       map.hasOwnProperty(obj) &&
       typeof map[obj] !== 'string' &&
-      type !== 'text'
+      type === 'list'
     ) {
       map[obj].splice(index, 1)
 
