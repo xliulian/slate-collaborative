@@ -130,7 +130,9 @@ export const AutomergeEditor = {
         Editor.withoutNormalizing(e, () => {
           if (HistoryEditor.isHistoryEditor(e) && !preserveExternalHistory) {
             HistoryEditor.withoutSaving(e, () => {
-              slateOps.forEach((o: Operation) => e.apply(o))
+              slateOps.forEach((o: Operation) => {
+                e.apply(o)
+              })
             })
           } else {
             slateOps.forEach((o: Operation) => e.apply(o))
@@ -154,7 +156,7 @@ export const AutomergeEditor = {
     }
 
     const changed = Automerge.change<SyncDoc>(doc, (d: any) => {
-      delete d.cusors
+      delete d.cursors
     })
 
     e.onCursor && e.onCursor(null)

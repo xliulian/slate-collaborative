@@ -38,11 +38,7 @@ export default class SocketIOCollaboration {
    */
 
   constructor(options: SocketIOCollaborationOptions) {
-    if (typeof options.entry === 'number') {
-      this.io = io(options.entry as number, options.connectOpts)
-    } else {
-      this.io = io(options.entry as Server, options.connectOpts)
-    }
+    this.io = io(options.entry as Server, options.connectOpts)
 
     this.backend = new AutomergeBackend()
 
