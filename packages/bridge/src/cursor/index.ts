@@ -16,15 +16,12 @@ export const setCursor = (
   const newCursor = cursorOps[cursorOps.length - 1]?.newProperties || {}
 
   if (selection) {
-    const newCursorData = Object.assign(
-      (doc.cursors[id] && JSON.parse(doc.cursors[id])) || {},
-      newCursor,
-      selection,
-      {
-        ...cursorData,
-        isForward: Range.isForward(selection)
-      }
-    )
+    const oldCursorData = (doc.cursors[id] && JSON.parse(doc.cursors[id])) || {}
+    const newCursorData = Object.assign(oldCursorData, newCursor, selection, {
+      ...cursorData,
+      isForward: Range.isForward(selection),
+      seq: (oldCursorData.seq || 0) + 1
+    })
 
     doc.cursors[id] = JSON.stringify(newCursorData)
   } else {
