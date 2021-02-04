@@ -62,6 +62,12 @@ const removeNodeOp = (op: Automerge.Diff) => (map: any, doc: Element) => {
       throw new TypeError('Index is not a number')
     }
 
+    if (parent?.children?.[index as number]) {
+      parent.children.splice(index, 1)
+    } else if (parent?.[index as number]) {
+      parent.splice(index, 1)
+    }
+
     return {
       type: 'remove_node',
       path: slatePath.length ? slatePath.concat(index) : [index],
@@ -72,7 +78,12 @@ const removeNodeOp = (op: Automerge.Diff) => (map: any, doc: Element) => {
   }
 }
 
-const opRemove = (op: Automerge.Diff, [map, ops]: any) => {
+const opRemove = (
+  op: Automerge.Diff,
+  [map, ops]: any,
+  doc: any,
+  tmpDoc: Element
+) => {
   try {
     const { index, path, obj, type } = op
 
@@ -95,7 +106,7 @@ const opRemove = (op: Automerge.Diff, [map, ops]: any) => {
 
     const fn = key === 'text' ? removeTextOp : removeNodeOp
 
-    return [map, [...ops, fn(op)]]
+    return [map, [...ops, fn(op)(map, tmpDoc)]]
   } catch (e) {
     console.error(e, op, toJS(map))
 
