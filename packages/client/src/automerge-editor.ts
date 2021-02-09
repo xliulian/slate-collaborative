@@ -140,12 +140,19 @@ export const AutomergeEditor = {
         e.isRemote = true
 
         const applyRemoteOpsToSlate = () => {
+          let opCount = e.operations.length
           Editor.withoutNormalizing(e, () => {
             slateOps.forEach((o: Operation) => {
               e.apply(o)
             })
+            opCount = e.operations.length
             e.onCursor && e.onCursor(updated.cursors)
           })
+          if (e.operations.length > opCount) {
+            // XXX: there are some normalization operations happened
+            //      make sure we apply it to remote (automerge doc)
+            AutomergeEditor.applySlateOps(e, docId, e.operations.slice(opCount))
+          }
         }
         if (HistoryEditor.isHistoryEditor(e) && !preserveExternalHistory) {
           HistoryEditor.withoutSaving(e, applyRemoteOpsToSlate)
