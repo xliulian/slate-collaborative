@@ -133,19 +133,19 @@ export const AutomergeEditor = {
         const wasRemote = e.isRemote
         e.isRemote = true
 
-        Editor.withoutNormalizing(e, () => {
-          if (HistoryEditor.isHistoryEditor(e) && !preserveExternalHistory) {
-            HistoryEditor.withoutSaving(e, () => {
-              slateOps.forEach((o: Operation) => {
-                e.apply(o)
-              })
+        const applyRemoteOpsToSlate = () => {
+          Editor.withoutNormalizing(e, () => {
+            slateOps.forEach((o: Operation) => {
+              e.apply(o)
             })
-          } else {
-            slateOps.forEach((o: Operation) => e.apply(o))
-          }
-
-          e.onCursor && e.onCursor(updated.cursors)
-        })
+            e.onCursor && e.onCursor(updated.cursors)
+          })
+        }
+        if (HistoryEditor.isHistoryEditor(e) && !preserveExternalHistory) {
+          HistoryEditor.withoutSaving(e, applyRemoteOpsToSlate)
+        } else {
+          applyRemoteOpsToSlate()
+        }
 
         if (slateOps.length > 0) {
           // XXX: only schedule set isRemote false when we did scheduled onChange by apply.
