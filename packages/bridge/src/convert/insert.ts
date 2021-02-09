@@ -5,7 +5,7 @@ import { toSlatePath, toJS } from '../utils'
 
 import { SyncDoc } from '../model'
 
-const insertTextOp = ({ index, path, value }: Automerge.Diff) => (
+const insertTextOp = ({ obj, index, path, value }: Automerge.Diff) => (
   map: any,
   doc: Element
 ) => {
@@ -13,6 +13,7 @@ const insertTextOp = ({ index, path, value }: Automerge.Diff) => (
   const node = Node.get(doc, slatePath)!
   const text = node.text! as string
   node.text = [text.slice(0, index), value, text.slice(index)].join('')
+  map[obj] = node.text
   return {
     type: 'insert_text',
     path: slatePath,
@@ -23,11 +24,11 @@ const insertTextOp = ({ index, path, value }: Automerge.Diff) => (
 }
 
 const insertNodeOp = (
-  { value, obj, index, path }: Automerge.Diff,
+  { link, value, obj, index, path }: Automerge.Diff,
   doc: any
 ) => (map: any, tmpDoc: Element) => {
   const ops: any = []
-
+  /*
   const iterate = ({ children, ...json }: any, path: any) => {
     const node = toJS(children ? { ...json, children: [] } : json)
 
@@ -49,11 +50,21 @@ const insertNodeOp = (
         iterate((node && toJS(node)) || n, [...path, i])
       })
   }
+*/
+  const source = link ? map[value] : value
 
-  const source =
-    map[value] || toJS(map[obj] || Automerge.getObjectById(doc, value))
+  const slatePath = toSlatePath(path)
+  const parent = Node.get(tmpDoc, slatePath)!
+  map[obj] = parent.children
+  map[obj].splice(index, 0, source)
 
-  source && iterate(source, [...toSlatePath(path), index])
+  ops.push({
+    type: 'insert_node',
+    path: [...slatePath, index],
+    node: toJS(source)
+  })
+
+  //source && iterate(source, [...toSlatePath(path), index])
 
   return ops
 }
@@ -72,22 +83,29 @@ const opInsert = (
   try {
     const { link, obj, path, index, type, value } = op
 
-    if (link && map.hasOwnProperty(obj)) {
-      map[obj].splice(index, 0, map[value] || value)
-    } else if ((type === 'text' || type === 'list') && !path) {
-      map[obj] = map[obj]
-        ? map[obj]
-            .slice(0, index)
-            .concat(value)
-            .concat(map[obj].slice(index))
-        : value
+    if (link && !map.hasOwnProperty(value)) {
+      map[value] = toJS(Automerge.getObjectById(doc, value))
     }
-    if (path) {
+    if (path && path.length && path[0] === 'children') {
       const insert = insertByType[type]
 
       const operation = insert && insert(op, doc)(map, tmpDoc)
 
       ops.push(operation)
+    } else {
+      if (!map.hasOwnProperty(obj)) {
+        map[obj] = toJS(Automerge.getObjectById(doc, obj))
+      }
+      if (type === 'list') {
+        map[obj].splice(index, 0, link ? map[value] : value)
+      } else if (type === 'text') {
+        map[obj] = map[obj]
+          ? map[obj]
+              .slice(0, index)
+              .concat(value)
+              .concat(map[obj].slice(index))
+          : value
+      }
     }
 
     return [map, ops]

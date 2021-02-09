@@ -9,25 +9,17 @@ const removeTextOp = (op: Automerge.Diff) => (map: any, doc: Element) => {
   try {
     const { index, path, obj } = op
 
-    const slatePath = toSlatePath(path).slice(0, path?.length)
+    const slatePath = toSlatePath(path)
 
-    let node = map[obj]
-
-    try {
-      node = getTarget(doc, slatePath)
-    } catch (e) {
-      console.error(e, slatePath, op, map, toJS(doc))
-    }
+    const node = getTarget(doc, slatePath)
 
     if (typeof index !== 'number') return
 
     const text = node?.text?.[index] || '*'
 
-    if (node) {
-      node.text = node?.text
-        ? node.text.slice(0, index) + node.text.slice(index + 1)
-        : ''
-    }
+    node.text = node.text.slice(0, index) + node.text.slice(index + 1)
+
+    map[obj] = node.text
 
     return {
       type: 'remove_text',
@@ -48,8 +40,8 @@ const removeNodeOp = (op: Automerge.Diff) => (map: any, doc: Element) => {
     const slatePath = toSlatePath(path)
 
     const parent = getTarget(doc, slatePath)
-    const target = parent?.children?.[index as number] ||
-      parent?.[index as number] || { children: [] }
+    const target =
+      parent?.children?.[index as number] || parent?.[index as number] // || { children: [] }
 
     if (!target) {
       throw new TypeError('Target is not found!')
@@ -69,12 +61,17 @@ const removeNodeOp = (op: Automerge.Diff) => (map: any, doc: Element) => {
 
     return {
       type: 'remove_node',
-      path: slatePath.length ? slatePath.concat(index) : [index],
-      node: target
+      path: slatePath.concat(index),
+      node: toJS(target)
     }
   } catch (e) {
     console.error(e, op, map, toJS(doc))
   }
+}
+
+const removeByType = {
+  text: removeTextOp,
+  list: removeNodeOp
 }
 
 const opRemove = (
@@ -84,16 +81,21 @@ const opRemove = (
   tmpDoc: Element
 ) => {
   try {
-    const { index, path, obj, type } = op
+    const { index, key, path, obj, type } = op
 
-    if (type === 'map' && path) {
+    if (type === 'map') {
       // remove a key from map, mapping to slate set a key's value to undefined.
-      if (path[0] === 'children') {
+      if (path && path.length && path[0] === 'children') {
         ops.push(setDataOp(op, doc)(map, tmpDoc))
+      } else {
+        if (!map.hasOwnProperty(obj)) {
+          map[obj] = toJS(Automerge.getObjectById(doc, obj))
+        }
+        delete map[obj][key as string]
       }
       return [map, ops]
     }
-
+    /*
     if (
       map.hasOwnProperty(obj) &&
       typeof map[obj] !== 'string' &&
@@ -106,12 +108,27 @@ const opRemove = (
     }
 
     if (!path) return [map, ops]
+*/
+    if (path && path.length && path[0] === 'children') {
+      const remove = removeByType[type]
 
-    const key = path[path.length - 1]
+      const operation = remove && remove(op, doc)(map, tmpDoc)
 
-    const fn = key === 'text' ? removeTextOp : removeNodeOp
+      ops.push(operation)
+    } else {
+      if (!map.hasOwnProperty(obj)) {
+        map[obj] = toJS(Automerge.getObjectById(doc, obj))
+      }
+      if (type === 'list') {
+        map[obj].splice(index, 1)
+      } else if (type === 'text') {
+        map[obj] = map[obj]
+          .slice(0, index)
+          .concat(map[obj].slice((index as number) + 1))
+      }
+    }
 
-    return [map, [...ops, fn(op)(map, tmpDoc)]]
+    return [map, ops]
   } catch (e) {
     console.error(e, op, toJS(map))
 
