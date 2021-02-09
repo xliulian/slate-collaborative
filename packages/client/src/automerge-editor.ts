@@ -101,6 +101,12 @@ export const AutomergeEditor = {
     Editor.withoutNormalizing(e, () => {
       const doc = toJS(mergedDoc)
       e.children = doc.children
+      // XXX: Since we are force override slate internal doc, clear what we can clear
+      if (HistoryEditor.isHistoryEditor(e)) {
+        e.history.undos = []
+        e.history.redos = []
+      }
+      e.selection = null
       e.onCursor && e.onCursor(doc.cursors)
     })
 
