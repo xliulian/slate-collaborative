@@ -1,6 +1,7 @@
 import * as Automerge from 'automerge'
-import { Element, Node } from 'slate'
+import { Element, Node, Path } from 'slate'
 
+import { getTarget } from '../path'
 import { toSlatePath, toJS } from '../utils'
 
 import { SyncDoc } from '../model'
@@ -18,8 +19,8 @@ const insertTextOp = ({ obj, index, path, value }: Automerge.Diff) => (
     type: 'insert_text',
     path: slatePath,
     offset: index,
-    text: value,
-    marks: []
+    text: value
+    //marks: []
   }
 }
 
@@ -27,8 +28,8 @@ const insertNodeOp = (
   { link, value, obj, index, path }: Automerge.Diff,
   doc: any
 ) => (map: any, tmpDoc: Element) => {
-  const ops: any = []
-  /*
+  /*const ops: any = []
+
   const iterate = ({ children, ...json }: any, path: any) => {
     const node = toJS(children ? { ...json, children: [] } : json)
 
@@ -58,15 +59,16 @@ const insertNodeOp = (
   map[obj] = parent.children
   map[obj].splice(index, 0, source)
 
-  ops.push({
+  //ops.push({
+  return {
     type: 'insert_node',
     path: [...slatePath, index],
     node: toJS(source)
-  })
+  } //)
 
   //source && iterate(source, [...toSlatePath(path), index])
 
-  return ops
+  //return ops
 }
 
 const insertByType = {
@@ -91,6 +93,40 @@ const opInsert = (
 
       const operation = insert && insert(op, doc)(map, tmpDoc)
 
+      if (
+        operation &&
+        operation.type === 'insert_node' &&
+        operation.node &&
+        operation.node.text &&
+        Object.keys(operation.node).length === 1
+      ) {
+        const lastOp = ops[ops.length - 1]
+        if (
+          lastOp &&
+          lastOp.type === 'remove_text' &&
+          Path.equals(operation.path, Path.next(lastOp.path)) &&
+          lastOp.text.slice(-operation.node.text.length) === operation.node.text
+        ) {
+          // insert text node just after delete some text, it possiblly be some split_node op?
+          const slatePath = toSlatePath(lastOp.path)
+          const lastNode = getTarget(tmpDoc, slatePath)
+          if (lastNode.text.length === lastOp.offset) {
+            // previous node was just deleted text until the end, so we are splitting
+            if (lastOp.text.length > operation.node.text.length) {
+              lastOp.text = lastOp.text.slice(0, -operation.node.text.length)
+            } else {
+              ops.pop()
+            }
+            ops.push({
+              type: 'split_node',
+              path: lastOp.path,
+              position: lastOp.offset,
+              properties: {}
+            })
+            return [map, ops]
+          }
+        }
+      }
       ops.push(operation)
     } else {
       if (!map.hasOwnProperty(obj)) {

@@ -1,5 +1,5 @@
 import * as Automerge from 'automerge'
-import { Element } from 'slate'
+import { Element, Path } from 'slate'
 
 import { toSlatePath, toJS } from '../utils'
 import { getTarget } from '../path'
@@ -25,8 +25,8 @@ const removeTextOp = (op: Automerge.Diff) => (map: any, doc: Element) => {
       type: 'remove_text',
       path: slatePath,
       offset: index,
-      text,
-      marks: []
+      text
+      //marks: []
     }
   } catch (e) {
     console.error(e, op, map, toJS(doc))
@@ -114,6 +114,19 @@ const opRemove = (
 
       const operation = remove && remove(op, doc)(map, tmpDoc)
 
+      if (operation && operation.type === 'remove_text') {
+        const lastOp = ops[ops.length - 1]
+        if (
+          lastOp &&
+          lastOp.type === 'remove_text' &&
+          operation.offset === lastOp.offset &&
+          Path.equals(operation.path, lastOp.path)
+        ) {
+          // same position remove text, merge it into one op.
+          lastOp.text += operation.text
+          return [map, ops]
+        }
+      }
       ops.push(operation)
     } else {
       if (!map.hasOwnProperty(obj)) {
