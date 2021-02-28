@@ -1,5 +1,6 @@
 import * as Automerge from 'automerge'
 import { Element, Node, Path } from 'slate'
+import _ from 'lodash'
 
 import { getTarget } from '../path'
 import { toSlatePath, toJS } from '../utils'
@@ -93,15 +94,11 @@ const opInsert = (
 
       const operation = insert && insert(op, doc)(map, tmpDoc)
 
-      if (
-        operation &&
-        operation.type === 'insert_node' &&
-        operation.node &&
-        operation.node.text &&
-        Object.keys(operation.node).length === 1
-      ) {
+      if (operation && operation.type === 'insert_node' && operation.node) {
         const lastOp = ops[ops.length - 1]
         if (
+          operation.node.text &&
+          Object.keys(operation.node).length === 1 &&
           lastOp &&
           lastOp.type === 'remove_text' &&
           Path.equals(operation.path, Path.next(lastOp.path)) &&
@@ -125,6 +122,34 @@ const opInsert = (
             })
             return [map, ops]
           }
+        } else if (
+          lastOp &&
+          lastOp.type === 'remove_node' &&
+          _.isEqual(lastOp.node, operation.node)
+        ) {
+          ops.pop()
+          // XXX: fix the newPath since it currently is the case old path was removed
+          //      but we need consider if the old path is not removed, what the newPath
+          //      should be.
+          //   1. if newPath is before path, it is not effected.
+          //   2. if newPath same or under path, at the path end position, should add 1
+          //   3. if newPath above path, remove path does not effect above path
+          //   4. if newPath is after path, and is or under siblings after lowest level of path, add 1
+          //   5. if newPath is after path, but not share same parent, it is not effected.
+          const newPath = operation.path
+          if (
+            !Path.isBefore(operation.path, lastOp.path) &&
+            operation.path.length >= lastOp.path.length && // parent also match !isBefore, but not effected.
+            Path.isCommon(Path.parent(lastOp.path), operation.path)
+          ) {
+            newPath[lastOp.path.length - 1] += 1
+          }
+          ops.push({
+            type: 'move_node',
+            path: lastOp.path,
+            newPath
+          })
+          return [map, ops]
         }
       } else if (operation && operation.type === 'insert_text') {
         const lastOp = ops[ops.length - 1]

@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "automerge": "0.14.0",
+    "lodash": "^4.17.21",
     "slate": "0.59.0",
     "typescript": "^3.8.3"
   },
