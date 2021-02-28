@@ -126,6 +126,17 @@ const opInsert = (
             return [map, ops]
           }
         }
+      } else if (operation && operation.type === 'insert_text') {
+        const lastOp = ops[ops.length - 1]
+        if (
+          lastOp &&
+          lastOp.type === 'insert_text' &&
+          Path.equals(operation.path, lastOp.path) &&
+          lastOp.offset + lastOp.text.length === operation.offset
+        ) {
+          lastOp.text += operation.text
+          return [map, ops]
+        }
       }
       ops.push(operation)
     } else {
