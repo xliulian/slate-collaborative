@@ -125,15 +125,19 @@ export const AutomergeEditor = {
     data: Automerge.Message,
     preserveExternalHistory?: boolean
   ) => {
+    let current,
+      updated: any,
+      operations,
+      slateOps: Operation[] = []
     try {
-      const current: any = e.docSet.getDoc(docId)
+      current = e.docSet.getDoc(docId)
 
-      const updated = e.connection.receiveMsg(data)
+      updated = e.connection.receiveMsg(data)
 
-      const operations = Automerge.diff(current, updated)
+      operations = Automerge.diff(current, updated)
 
       if (operations.length) {
-        const slateOps = toSlateOp(operations, current)
+        slateOps = toSlateOp(operations, current)
 
         // do not change isRemote flag for no-op case.
         const wasRemote = e.isRemote
@@ -167,8 +171,9 @@ export const AutomergeEditor = {
           e.isRemote = wasRemote
         }
       }
-    } catch (e) {
-      console.error(e)
+    } catch (err) {
+      console.error(err, { current, updated, operations, slateOps, editor: e })
+      throw err
     }
   },
 
