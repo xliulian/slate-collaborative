@@ -126,6 +126,39 @@ const opRemove = (
           lastOp.text += operation.text
           return [map, ops]
         }
+      } else if (
+        operation &&
+        operation.type === 'remove_node' &&
+        operation.node &&
+        operation.node.text &&
+        Object.keys(operation.node).length === 1
+      ) {
+        const lastOp = ops[ops.length - 1]
+        if (
+          lastOp &&
+          lastOp.type === 'insert_text' &&
+          Path.equals(operation.path, Path.next(lastOp.path)) &&
+          lastOp.text.slice(-operation.node.text.length) === operation.node.text
+        ) {
+          // remove text node just after insert some text, it possiblly be some merge_node op?
+          const slatePath = toSlatePath(lastOp.path)
+          const lastNode = getTarget(tmpDoc, slatePath)
+          if (lastOp.offset + lastOp.text.length === lastNode.text.length) {
+            // previous node was just inserted text to the end, so we are merging
+            if (lastOp.text.length > operation.node.text.length) {
+              lastOp.text = lastOp.text.slice(0, -operation.node.text.length)
+            } else {
+              ops.pop()
+            }
+            ops.push({
+              type: 'merge_node',
+              path: operation.path,
+              position: lastNode.text.length - operation.node.text.length,
+              properties: {}
+            })
+            return [map, ops]
+          }
+        }
       }
       ops.push(operation)
     } else {
