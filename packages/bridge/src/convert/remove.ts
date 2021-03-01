@@ -1,5 +1,6 @@
 import * as Automerge from 'automerge'
-import { Element, Path } from 'slate'
+import { Element, Path, Operation, Node } from 'slate'
+import _ from 'lodash'
 
 import { toSlatePath, toJS } from '../utils'
 import { getTarget } from '../path'
@@ -129,14 +130,14 @@ const opRemove = (
       } else if (
         operation &&
         operation.type === 'remove_node' &&
-        operation.node &&
-        operation.node.text &&
-        Object.keys(operation.node).length === 1
+        operation.node
       ) {
         const lastOp = ops[ops.length - 1]
         if (
           lastOp &&
           lastOp.type === 'insert_text' &&
+          operation.node.text &&
+          Object.keys(operation.node).length === 1 &&
           Path.equals(operation.path, Path.next(lastOp.path)) &&
           lastOp.text.slice(-operation.node.text.length) === operation.node.text
         ) {
@@ -157,6 +158,48 @@ const opRemove = (
               properties: {}
             })
             return [map, ops]
+          }
+        } else if (
+          lastOp &&
+          lastOp.type === 'insert_node' &&
+          operation.node.children
+        ) {
+          const lastOpParentPath = Path.parent(lastOp.path)
+          const lastOpPathIdx = lastOp.path[lastOp.path.length - 1]
+          if (
+            Path.equals(operation.path, Path.next(lastOpParentPath)) &&
+            (Node.get(tmpDoc, lastOpParentPath) as Element).children.length ===
+              lastOpPathIdx + 1
+          ) {
+            const previousInsertedNodes = ops
+              .slice(-operation.node.children.length)
+              .filter(
+                (slateOp: Operation, idx: number) =>
+                  slateOp.type === 'insert_node' &&
+                  Path.equals(
+                    slateOp.path,
+                    lastOpParentPath.concat(
+                      lastOpPathIdx + 1 - operation.node.children.length + idx
+                    )
+                  )
+              )
+              .map((slateOp: Operation) => slateOp.node)
+            if (
+              previousInsertedNodes.length === operation.node.children.length &&
+              _.isEqual(previousInsertedNodes, operation.node.children)
+            ) {
+              ops.splice(
+                ops.length - previousInsertedNodes.length,
+                previousInsertedNodes.length
+              )
+              ops.push({
+                type: 'merge_node',
+                path: operation.path,
+                position: lastOpPathIdx - previousInsertedNodes.length + 1,
+                properties: _.omit(operation.node, 'children')
+              })
+              return [map, ops]
+            }
           }
         }
       }
