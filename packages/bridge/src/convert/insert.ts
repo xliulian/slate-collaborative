@@ -1,5 +1,5 @@
 import * as Automerge from 'automerge'
-import { Element, Node, Path } from 'slate'
+import { Element, Node, Path, Operation } from 'slate'
 import _ from 'lodash'
 
 import { getTarget } from '../path'
@@ -122,34 +122,63 @@ const opInsert = (
             })
             return [map, ops]
           }
-        } else if (
-          lastOp &&
-          lastOp.type === 'remove_node' &&
-          _.isEqual(lastOp.node, operation.node)
-        ) {
-          ops.pop()
-          // XXX: fix the newPath since it currently is the case old path was removed
-          //      but we need consider if the old path is not removed, what the newPath
-          //      should be.
-          //   1. if newPath is before path, it is not effected.
-          //   2. if newPath same or under path, at the path end position, should add 1
-          //   3. if newPath above path, remove path does not effect above path
-          //   4. if newPath is after path, and is or under siblings after lowest level of path, add 1
-          //   5. if newPath is after path, but not share same parent, it is not effected.
-          const newPath = operation.path
-          if (
-            !Path.isBefore(operation.path, lastOp.path) &&
-            operation.path.length >= lastOp.path.length && // parent also match !isBefore, but not effected.
-            Path.isCommon(Path.parent(lastOp.path), operation.path)
+        } else if (lastOp && lastOp.type === 'remove_node') {
+          const lastOpParentPath = Path.parent(lastOp.path)
+          if (_.isEqual(lastOp.node, operation.node)) {
+            ops.pop()
+            // XXX: fix the newPath since it currently is the case old path was removed
+            //      but we need consider if the old path is not removed, what the newPath
+            //      should be.
+            //   1. if newPath is before path, it is not effected.
+            //   2. if newPath same or under path, at the path end position, should add 1
+            //   3. if newPath above path, remove path does not effect above path
+            //   4. if newPath is after path, and is or under siblings after lowest level of path, add 1
+            //   5. if newPath is after path, but not share same parent, it is not effected.
+            const newPath = operation.path
+            if (
+              !Path.isBefore(operation.path, lastOp.path) &&
+              operation.path.length >= lastOp.path.length && // parent also match !isBefore, but not effected.
+              Path.isCommon(lastOpParentPath, operation.path)
+            ) {
+              newPath[lastOp.path.length - 1] += 1
+            }
+            ops.push({
+              type: 'move_node',
+              path: lastOp.path,
+              newPath
+            })
+            return [map, ops]
+          } else if (
+            operation.node.children &&
+            Path.equals(operation.path, Path.next(lastOpParentPath)) &&
+            (Node.get(tmpDoc, lastOpParentPath) as Element).children.length ===
+              lastOp.path[lastOp.path.length - 1]
           ) {
-            newPath[lastOp.path.length - 1] += 1
+            const previousRemovedNodes = ops
+              .slice(-operation.node.children.length)
+              .filter(
+                (slateOp: Operation) =>
+                  slateOp.type === 'remove_node' &&
+                  Path.equals(slateOp.path, lastOp.path)
+              )
+              .map((slateOp: Operation) => slateOp.node)
+            if (
+              previousRemovedNodes.length === operation.node.children.length &&
+              _.isEqual(previousRemovedNodes, operation.node.children)
+            ) {
+              ops.splice(
+                ops.length - previousRemovedNodes.length,
+                previousRemovedNodes.length
+              )
+              ops.push({
+                type: 'split_node',
+                path: lastOpParentPath,
+                position: lastOp.path[lastOp.path.length - 1],
+                properties: _.omit(operation.node, 'children')
+              })
+              return [map, ops]
+            }
           }
-          ops.push({
-            type: 'move_node',
-            path: lastOp.path,
-            newPath
-          })
-          return [map, ops]
         }
       } else if (operation && operation.type === 'insert_text') {
         const lastOp = ops[ops.length - 1]
