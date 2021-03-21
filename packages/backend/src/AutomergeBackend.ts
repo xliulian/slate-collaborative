@@ -79,15 +79,29 @@ class AutomergeBackend {
    * Append document to Automerge DocSet
    */
 
-  appendDocument = (docId: string, data: Node[]) => {
+  appendDocument = (docId: string, data: Node[] | string) => {
     try {
       if (this.getDocument(docId)) {
         throw new Error(`Already has document with id: ${docId}`)
       }
 
-      const sync = toSync({ cursors: {}, children: data })
+      let doc: SyncDoc
+      if (Array.isArray(data)) {
+        const sync = toSync({ cursors: {}, children: data })
 
-      const doc = Automerge.from<SyncDoc>(sync)
+        doc = Automerge.from<SyncDoc>(sync)
+      } else {
+        // we loaded previous saved raw SyncDoc
+        doc = Automerge.load<SyncDoc>(data)
+
+        if (doc.cursors) {
+          doc = Automerge.change(doc, (d: any) => {
+            for (const id in d.cursors) {
+              delete d.cursors[id]
+            }
+          })
+        }
+      }
 
       this.docSet.setDoc(docId, doc)
     } catch (e) {

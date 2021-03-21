@@ -23,8 +23,12 @@ export interface SocketIOCollaborationOptions {
   onDocumentLoad?: (
     pathname: string,
     query?: Object
-  ) => Promise<Node[]> | Node[]
-  onDocumentSave?: (pathname: string, doc: Node[]) => Promise<void> | void
+  ) => Promise<Node[] | string> | Node[] | string
+  onDocumentSave?: (
+    pathname: string,
+    doc: Node[],
+    docHistory: string
+  ) => Promise<void> | void
 }
 
 export default class SocketIOCollaboration {
@@ -172,7 +176,12 @@ export default class SocketIOCollaboration {
         throw new Error(`Can't receive document by id: ${docId}`)
       }
 
-      onDocumentSave && (await onDocumentSave(docId, toJS(doc.children)))
+      onDocumentSave &&
+        (await onDocumentSave(
+          docId,
+          toJS(doc.children),
+          Automerge.save<SyncDoc>(doc)
+        ))
     } catch (e) {
       console.error(e, docId)
     }
