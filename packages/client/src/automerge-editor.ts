@@ -91,10 +91,10 @@ export const AutomergeEditor = {
 
     const externalDoc = Automerge.load<SyncDoc>(data)
 
-    const mergedDoc = Automerge.merge<SyncDoc>(
+    const mergedDoc = currentDoc ? Automerge.merge<SyncDoc>(
       externalDoc,
-      currentDoc || Automerge.init()
-    )
+      currentDoc
+    ) : externalDoc
 
     e.docSet.setDoc(docId, mergedDoc)
 
